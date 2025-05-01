@@ -1,0 +1,23 @@
+---
+minimum_pre_commit_version: '3.2.0'
+repos:
+  - repo: meta
+    hooks:
+      - id: identity
+        name: Print checked files
+        description: Print input to the static check hooks for troubleshooting
+      - id: check-hooks-apply
+        name: Check if all hooks apply to the repository
+
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: Format go code
+        entry: golines --base-formatter=gofumpt --write-output --max-len=110 --chain-split-dots
+        additional_dependencies: [github.com/segmentio/golines@latest, mvdan.cc/gofumpt@v0.8.0]
+        types: [go]
+        language: golang
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.7
+    hooks:
+      - id: actionlint

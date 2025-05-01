@@ -1,0 +1,42 @@
+name: CI
+on: [ push, pull_request ]
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+    - uses: extractions/setup-just@v3
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
+    - uses: astral-sh/setup-uv@v6
+      with:
+        # We are using uv to install pre-commit, we don't have anything by default to cache
+        # https://github.com/astral-sh/setup-uv
+        cache-dependency-glob: ""
+    - uses: actions/cache@v4
+      with:
+        path: ~/.cache/pre-commit
+        key: pre-commit-3|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
+    - name: Install pre-commit
+      run: uv tool install pre-commit
+    - run: just lint
+      env:
+        SKIP: actionlint
+  test:
+    name: Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version:
+        - "1.21"
+        - "1.22"
+        - "1.23"
+        - "1.24"
+    steps:
+    - uses: extractions/setup-just@v3
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.version }}
+    - run: just test
+

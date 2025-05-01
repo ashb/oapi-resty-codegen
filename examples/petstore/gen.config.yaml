@@ -1,0 +1,15 @@
+---
+# yamllint disable rule:line-length
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/HEAD/configuration-schema.json
+# yamllint enable
+package: petstore
+output: client.gen.go
+generate:
+  models: true
+  client: true
+output-options:
+  # overlay:
+  #   path: overlay.yml
+  # user-templates:
+  #   client-with-responses.tmpl: _templates/client-with-responses.tmpl
+  #   client.tmpl: _templates/client.tmpl
