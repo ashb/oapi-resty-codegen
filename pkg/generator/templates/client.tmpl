@@ -1,0 +1,83 @@
+// RequestEditorFn	is the function signature for the RequestEditor callback function
+{{$clientTypeName := opts.OutputOptions.ClientTypeName -}}
+
+// {{ $clientTypeName }} which conforms to the OpenAPI3 specification for this service.
+type {{ $clientTypeName }} struct {
+	// The endpoint of the server conforming to this interface, with scheme,
+	// https://api.deepmap.com for example. This can contain a path relative
+	// to the server, such as https://api.deepmap.com/dev-test, and all the
+	// paths in the swagger spec will be appended to the server.
+	Server string
+
+	*resty.Client
+}
+// ClientOption allows setting custom parameters during construction
+type ClientOption func(*{{ $clientTypeName }}) error
+
+func New{{ $clientTypeName }}(server string, opts ...ClientOption) ({{ $clientTypeName }}Interface, error) {
+	// create a client with sane default values
+	client := {{ $clientTypeName }}{
+			Server: server,
+			Client: resty.New(),
+	}
+	// mutate client and add all optional params
+	for _, o := range opts {
+		if err := o(&client); err != nil {
+			return nil, err
+		}
+	}
+	// ensure the server URL always has a trailing slash
+	if !strings.HasSuffix(client.Server, "/") {
+		client.Server += "/"
+	}
+
+	// create resty Client, if not already present
+	if client.Client == nil {
+		client.Client = resty.New()
+		client.Client.SetBaseURL(client.Server)
+	}
+	return &client, nil
+}
+
+// WithHTTPClient allows overriding the default Doer, which is
+// automatically created using http.Client. This is useful for tests.
+//
+// This will re-create the resty Client, so this should appear before any
+// middleware is added
+func WithHTTPClient(hc *http.Client) ClientOption {
+	return func(c *{{ $clientTypeName }}) error {
+		c.Client = resty.NewWithClient(hc)
+		return nil
+	}
+}
+
+// WithRoundTripper method sets custom http.Transport or any http.RoundTripper
+// compatible interface implementation in the Resty client
+func WithRoundTripper(transport http.RoundTripper) ClientOption {
+	return func(c *{{ $clientTypeName }}) error {
+		c.Client.SetTransport(transport)
+		return nil
+	}
+}
+
+// WithRequestEditorFn allows setting up a callback function, which will be
+// called right before sending the request. This can be used to mutate the request.
+func WithRequestMiddleware(mw resty.RequestMiddleware) ClientOption {
+	return func(c *{{ $clientTypeName }}) error {
+		c.Client = c.Client.AddRequestMiddleware(mw)
+		return nil
+	}
+}
+
+{{range $tag, $ops := . | operationsByTag -}}
+func (c *{{ $clientTypeName }}){{ $tag | tagToClass }}() {{ $tag | tagToClass }}Client {
+	return &{{ printf "%s%s" ($tag | tagToClass | lcFirst) "Client"}}{c.Client}
+}
+{{end}}{{/* operationsByTag -*/}}
+
+type {{ $clientTypeName }}Interface interface {
+{{range $tag, $ops := . | operationsByTag -}}
+	// {{ $tag | tagToClass }} deals with all the {{ $tag }} endpoints
+	{{ $tag | tagToClass }}() {{ $tag | tagToClass }}Client
+{{end}}{{/* operationsByTag -*/}}
+}
