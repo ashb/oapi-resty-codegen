@@ -2,6 +2,8 @@ name: CI
 on: [ push, pull_request ]
 jobs:
   lint:
+    # Don't run two jobs for a PR
+    if: "${{ github.event_name == 'pull_request' || github.head_ref }}"
     name: Lint
     runs-on: ubuntu-latest
     steps:
@@ -19,11 +21,14 @@ jobs:
         key: pre-commit-3|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
     - name: Install pre-commit
       run: uv tool install pre-commit
+    - run: just generate
     - run: just lint
       env:
         SKIP: actionlint
   test:
-    name: Build
+    # Don't run two jobs for a PR
+    if: "${{ github.event_name == 'pull_request' || github.head_ref }}"
+    name: Test
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -38,5 +43,13 @@ jobs:
     - uses: actions/setup-go@v5
       with:
         go-version: ${{ matrix.version }}
-    - run: just test
+    - name: Run tests
+      run: |
+        just test -f github-actions --jsonfile testrun.json
+    - name: Report
+      uses: mcous/go-test-annotations@c88dae7c338c628e850685a0e8aa6a8fc2f4685d
+      # Only upload annotations from 1.24 -- we can manually go and look for other failures
+      if: ${{ !cancelled() && matrix.version == '1.24' }}
+      with:
+        test-report: testrun.json
 
