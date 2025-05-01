@@ -17,6 +17,12 @@ repos:
         additional_dependencies: [github.com/segmentio/golines@latest, mvdan.cc/gofumpt@v0.8.0]
         types: [go]
         language: golang
+      - id: vet
+        name: go vet
+        entry: go vet ./...
+        types: [go]
+        pass_filenames: false
+        language: golang
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.7
     hooks:
