@@ -4,18 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/oapi-codegen/oapi-codegen/v2/pkg/codegen"
-	"github.com/oapi-codegen/oapi-codegen/v2/pkg/util"
+	"github.com/ashb/oapi-resty-codegen/pkg/generator"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 )
-
-type configuration struct {
-	codegen.Configuration `yaml:",inline"`
-
-	// OutputFile is the filename to output.
-	OutputFile string `yaml:"output,omitempty"`
-}
 
 var (
 	flagConfigFile string
@@ -24,7 +16,7 @@ var (
 		Short:      "Customized OpenAPI genration for Airflow's Go SDK",
 		RunE:       Run,
 		ArgAliases: []string{"spec-file"},
-		Args:       cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
+		Args:       cobra.MatchAll(cobra.MaximumNArgs(1), cobra.OnlyValidArgs),
 	}
 )
 
@@ -33,35 +25,18 @@ func Run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("error reading config file '%s': %w", flagConfigFile, err)
 	}
-	var opts configuration
+	var opts generator.GenerateArgs
 	if err := yaml.UnmarshalStrict(configFile, &opts); err != nil {
 		return fmt.Errorf("error parsing '%s' as YAML: %w", flagConfigFile, err)
 	}
 
-	// Now, ensure that the config options are valid.
-	if err := opts.Validate(); err != nil {
-		return fmt.Errorf("configuration error: %w", err)
+	if len(args) > 0 {
+		opts.Input = args[0]
 	}
 
-	overlayOpts := util.LoadSwaggerWithOverlayOpts{
-		Path: opts.OutputOptions.Overlay.Path,
-		// default to strict, but can be overridden
-		Strict: true,
-	}
-
-	if opts.OutputOptions.Overlay.Strict != nil {
-		overlayOpts.Strict = *opts.OutputOptions.Overlay.Strict
-	}
-
-	opts.AdditionalImports = append(opts.AdditionalImports, codegen.AdditionalImport{Package: "resty.dev/v3"})
-
-	spec, err := util.LoadSwaggerWithOverlay(args[0], overlayOpts)
+	code, err := generator.Generate(opts)
 	if err != nil {
-		return fmt.Errorf("error loading swagger spec in %s\n: %w", args[0], err)
-	}
-	code, err := codegen.Generate(spec, opts.Configuration)
-	if err != nil {
-		return fmt.Errorf("error generating code: %w", err)
+		return err
 	}
 
 	if opts.OutputFile != "" {

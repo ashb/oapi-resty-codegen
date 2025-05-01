@@ -1,0 +1,116 @@
+{{range $tag, $ops := . | operationsByTag -}}
+{{end}}{{/* operationsByTag -*/}}
+
+
+{{range $tag, $ops := . | operationsByTag -}}
+{{- $class := printf "%s%s" ($tag | tagToClass | lcFirst) "Client" -}}
+
+type {{ $class }} struct {
+  *resty.Client
+}
+{{- range $op := $ops }}{{
+$localOpid := $op | convertOperationWithTag $tag
+}}{{ with $op }}
+
+{{ $responseTypeName := "any" -}}
+{{ $responseTypeDefinitions := getResponseTypeDefinitions . -}}
+{{ $hasRespType := ge ($responseTypeDefinitions | len) 1 -}}
+{{ if $hasRespType -}}
+{{ $responseTypeName = (index $responseTypeDefinitions 0).Schema.GoType -}}
+{{ end -}}
+
+// {{ $localOpid }} returns the lower level [resty.Response]
+func (c *{{ $class }}) {{ $localOpid }}Response(ctx context.Context
+    {{- .PathParams | genParamArgs -}}
+    {{if .RequiresParamObject}}, params *{{.OperationId}}Params{{ end -}}
+) (resp *resty.Response, err error) {
+    var errResp map[string]any
+    {{ if $hasRespType -}}
+    var res {{ $responseTypeName }}
+    {{- end }}
+
+{{range $paramIdx, $param := .PathParams -}}
+    var pathParam{{$paramIdx}} string
+    {{if .IsPassThrough}}
+    pathParam{{$paramIdx}} = {{.GoVariableName}}
+    {{end}}
+    {{if .IsJson}}
+    var pathParamBuf{{$paramIdx}} []byte
+    pathParamBuf{{$paramIdx}}, err = json.Marshal({{.GoVariableName}})
+    if err != nil {
+        return nil, err
+    }
+    pathParam{{$paramIdx}} = string(pathParamBuf{{$paramIdx}})
+    {{end}}
+    {{if .IsStyled}}
+    pathParam{{$paramIdx}}, err = runtime.StyleParamWithLocation("{{.Style}}", {{.Explode}}, "{{.ParamName}}", runtime.ParamLocationPath, {{.GoVariableName}})
+    if err != nil {
+        return nil, err
+    }
+    {{end -}}
+{{ end -}}{{/* range .PathParams */}}
+    return c.R().
+    {{- range $paramIdx, $param := .PathParams}}
+      SetPathParam("{{ $param.ParamName }}", pathParam{{$paramIdx}}).{{end}}
+    {{if .RequiresParamObject }}SetBody(params).{{ end}}
+      SetError(errResp).
+    {{- if $hasRespType }}
+      SetResult(&res).
+    {{- end }}
+      {{ $op.Method | lower | title }}("{{ .Path }}")
+}
+
+func (c *{{ $class }}) {{ $localOpid }}(ctx context.Context
+    {{- genParamArgs .PathParams -}}
+    {{if .RequiresParamObject}}, params *{{.OperationId}}Params{{ end -}}
+  {{- if $hasRespType -}}
+  ) (*{{ $responseTypeName }}, error) {
+    res, err := c.{{ $localOpid }}Response(ctx{{genParamNames .PathParams}}{{if .RequiresParamObject}}, params{{ end -}})
+    if err != nil {
+      return nil, err
+    }
+
+    return res.Result().(*{{ $responseTypeName }}), nil
+{{- else -}}
+  ) error {
+    _, err := c.{{ $localOpid }}Response(ctx{{genParamNames .PathParams}}{{if .RequiresParamObject}}, params{{ end -}})
+    return err
+{{- end }}
+}
+
+{{end }}{{/* with $op -*/}}
+{{end }}{{/* operations -*/}}
+{{end}}{{/* operationsByTag -*/}}
+
+{{range $tag, $ops := . | operationsByTag -}}
+
+{{- $iface := printf "%sClient" ($tag | tagToClass) -}}
+{{- $class := ($iface | lcFirst) -}}
+type {{ $iface }} interface {
+{{- range $op := $ops }}
+{{ $responseTypeName := "any" -}}
+{{ $responseTypeDefinitions := getResponseTypeDefinitions . -}}
+{{ $hasRespType := ge ($responseTypeDefinitions | len) 1 -}}
+{{ if $hasRespType -}}
+{{ $responseTypeName = (index $responseTypeDefinitions 0).Schema.GoType -}}
+{{ end -}}
+  {{ toGoComment $op.Spec.Description "" }}
+  {{ $op | convertOperationWithTag $tag }}(ctx context.Context
+    {{- $op.PathParams | genParamArgs -}}
+    {{if $op.RequiresParamObject}}, params *{{$op.OperationId}}Params{{ end -}}
+  {{- if $hasRespType -}}
+  ) (*{{ $responseTypeName }}, error)
+{{- else -}}
+  ) error
+{{- end }}
+
+  // Returns the [resty.Response] for {{ $op | convertOperationWithTag $tag }}
+  {{ $op | convertOperationWithTag $tag }}Response(ctx context.Context
+    {{- $op.PathParams | genParamArgs -}}
+    {{if $op.RequiresParamObject}}, params *{{$op.OperationId}}Params{{ end -}}
+  ) (*resty.Response, error)
+
+{{- end}}
+}
+var _ {{ $iface }} = (*{{ $class }})(nil)
+{{end}}{{/* operationsByTag -*/}}
