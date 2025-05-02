@@ -7,6 +7,8 @@ import (
 	"github.com/oapi-codegen/oapi-codegen/v2/pkg/codegen"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+
+	"github.com/gertd/go-pluralize"
 )
 
 func operationsByTag(defs []codegen.OperationDefinition) map[string][]codegen.OperationDefinition {
@@ -31,16 +33,23 @@ func convertOperationWithTag(tag string, op codegen.OperationDefinition) string 
 	//
 	// - ("Asset Events", "GetAssetEventByAssetNameUri") -> "GetByAssetNameUri"
 	// - ("Variables", "GetVariable") -> "Get"
+	// - ("Pet", "FindPetsByStatus") -> "FindByStatus"
+	// etc
 
 	// TODO: Add config to supoprt
 	// - ("Task Instances", "TiHeartbeat") -> "Heartbeat"
 
 	class := tagToClass(tag)
 
+	pluralize := pluralize.NewClient()
+	// We always try the longer form
+	class = pluralize.Plural(class)
+
 	before, after, found := strings.Cut(op.OperationId, class)
 
-	if !found && strings.HasSuffix(class, "s") {
-		before, after, found = strings.Cut(op.OperationId, strings.TrimSuffix(class, "s"))
+	if !found && pluralize.IsPlural(class) {
+		class = pluralize.Singular(class)
+		before, after, found = strings.Cut(op.OperationId, class)
 	}
 
 	if !found {
@@ -50,10 +59,22 @@ func convertOperationWithTag(tag string, op codegen.OperationDefinition) string 
 	return before + after
 }
 
+func jsonTypeOrFirst[T any](items []T) T {
+	var first T
+	for i, item := range items {
+		if i == 0 {
+			first = item
+		}
+	}
+
+	return first
+}
+
 func init() {
 	maps.Copy(codegen.TemplateFunctions, map[string]any{
 		"operationsByTag":         operationsByTag,
 		"tagToClass":              tagToClass,
 		"convertOperationWithTag": convertOperationWithTag,
+		"bestBody":                jsonTypeOrFirst[codegen.RequestBodyDefinition],
 	})
 }
