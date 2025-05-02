@@ -1,3 +1,57 @@
+{{define "fnParams" }}ctx context.Context
+    {{- .PathParams | genParamArgs -}}
+    {{if .RequiresParamObject}}, params *{{.OperationId}}Params{{ end -}}
+    {{if .BodyRequired}}, body *{{ (.Bodies | bestBody).Schema.GoType }}{{ end -}}
+    {{- end -}}{{/*- end block params -*/}}
+
+
+type GeneralHTTPError struct {
+  Response *resty.Response
+  JSON map[string]any
+  Text string
+}
+
+var errorTypes = map[int]string{
+            1: "informational response",
+            3: "redirect response",
+            4: "client error",
+            5: "server error",
+        }
+
+func (e GeneralHTTPError) Error() string {
+	var b strings.Builder
+	kind, ok := errorTypes[e.Response.StatusCode() / 100]
+	if !ok { kind = "unknown HTTP error"}
+	fmt.Fprintf(&b, "%s '%s'", kind, e.Response.Status())
+	if e.JSON != nil {
+		fmt.Fprintf(&b, " %v", e.JSON)
+	} else {
+		fmt.Fprintf(&b, " content=%q", e.Text)
+	}
+	return b.String()
+}
+
+func HandleError(client *resty.Client, resp *resty.Response) error {
+	if !resp.IsError() {
+		return nil
+	}
+
+	e := GeneralHTTPError{Response: resp}
+
+	// fmt.Printf("HandleError: IsRead: %v Error: %T\n", resp.IsRead, resp.Error())
+	e.Text = resp.String()
+	if resp.Header().Get("content-type") == "application/json" {
+		if json.Unmarshal([]byte(e.Text), &e.JSON) == nil {
+			e.Text = ""
+		}
+	}
+
+	// Set the parsed error back into the object so `resp.Error()` returns the populated one!
+	resp.Request.SetError(&e)
+
+	return &e
+}
+
 {{range $tag, $ops := . | operationsByTag -}}
 {{end}}{{/* operationsByTag -*/}}
 
@@ -8,9 +62,9 @@
 type {{ $class }} struct {
   *resty.Client
 }
-{{- range $op := $ops }}{{
-$localOpid := $op | convertOperationWithTag $tag
-}}{{ with $op }}
+{{- range $op := $ops }}
+{{- $localOpid := $op | convertOperationWithTag $tag }}
+{{- with $op }}
 
 {{ $responseTypeName := "any" -}}
 {{ $responseTypeDefinitions := getResponseTypeDefinitions . -}}
@@ -19,12 +73,8 @@ $localOpid := $op | convertOperationWithTag $tag
 {{ $responseTypeName = (index $responseTypeDefinitions 0).Schema.GoType -}}
 {{ end -}}
 
-// {{ $localOpid }} returns the lower level [resty.Response]
-func (c *{{ $class }}) {{ $localOpid }}Response(ctx context.Context
-    {{- .PathParams | genParamArgs -}}
-    {{if .RequiresParamObject}}, params *{{.OperationId}}Params{{ end -}}
-) (resp *resty.Response, err error) {
-    var errResp map[string]any
+// {{ $localOpid }}Response performs the HTTP request and returns the lower level [resty.Response]
+func (c *{{ $class }}) {{ $localOpid }}Response({{ template "fnParams" . }}) (resp *resty.Response, err error) {
     {{ if $hasRespType -}}
     var res {{ $responseTypeName }}
     {{- end }}
@@ -49,23 +99,59 @@ func (c *{{ $class }}) {{ $localOpid }}Response(ctx context.Context
     }
     {{end -}}
 {{ end -}}{{/* range .PathParams */}}
-    return c.R().
+{{range $paramIdx, $param := .Params -}}
+    var param{{$paramIdx}} string
+    {{if .IsPassThrough}}
+    path{{$paramIdx}} = {{.GoVariableName}}
+    {{end}}
+    {{if .IsJson}}
+    var paramBuf{{$paramIdx}} []byte
+    paramBuf{{$paramIdx}}, err = json.Marshal({{.GoVariableName}})
+    if err != nil {
+        return nil, err
+    }
+    param{{$paramIdx}} = string(paramBuf{{$paramIdx}})
+    {{end}}
+    {{if .IsStyled}}
+    param{{$paramIdx}}, err = runtime.StyleParamWithLocation("{{.Style}}", {{.Explode}}, "{{.ParamName}}", runtime.ParamLocation{{ .In | ucFirst }}, params.{{.GoName}})
+    if err != nil {
+        return nil, err
+    }
+    {{end -}}
+{{ end -}}{{/* range .Params */}}
+
+    {{ if .BodyRequired -}}
+    if body == nil {
+      return nil, fmt.Errorf("{{ $localOpid }} requires a non-nil body argument")
+    }
+    {{ end -}}
+    resp, err = c.R().
     {{- range $paramIdx, $param := .PathParams}}
       SetPathParam("{{ $param.ParamName }}", pathParam{{$paramIdx}}).{{end}}
-    {{if .RequiresParamObject }}SetBody(params).{{ end}}
-      SetError(errResp).
+    {{ range $paramIdx, $param := .Params -}}
+    {{ if eq $param.In "header" -}}
+    SetHeader({{printf "%q" $param.ParamName}}, param{{$paramIdx}}).
+    {{ else if eq $param.In "query" -}}
+    SetQueryParam({{printf "%q" $param.ParamName}}, param{{$paramIdx}}).
+    {{ end -}}
+    {{- end -}}{{/* range .Params */}}
+    {{if .BodyRequired }}SetBody(body).{{ end}}
     {{- if $hasRespType }}
       SetResult(&res).
     {{- end }}
       {{ $op.Method | lower | title }}("{{ .Path }}")
+    if err != nil {
+        return resp, err
+    }
+    return resp, HandleError(c.Client, resp)
 }
 
-func (c *{{ $class }}) {{ $localOpid }}(ctx context.Context
-    {{- genParamArgs .PathParams -}}
-    {{if .RequiresParamObject}}, params *{{.OperationId}}Params{{ end -}}
+func (c *{{ $class }}) {{ $localOpid }}({{ template "fnParams" . -}}
   {{- if $hasRespType -}}
   ) (*{{ $responseTypeName }}, error) {
-    res, err := c.{{ $localOpid }}Response(ctx{{genParamNames .PathParams}}{{if .RequiresParamObject}}, params{{ end -}})
+    res, err := c.{{ $localOpid }}Response(ctx{{genParamNames .PathParams}}
+      {{- if .RequiresParamObject}}, params{{ end -}}
+      {{- if .BodyRequired }}, body{{ end }})
     if err != nil {
       return nil, err
     }
@@ -88,6 +174,7 @@ func (c *{{ $class }}) {{ $localOpid }}(ctx context.Context
 {{- $class := ($iface | lcFirst) -}}
 type {{ $iface }} interface {
 {{- range $op := $ops }}
+{{- $localOpid := $op | convertOperationWithTag $tag }}
 {{ $responseTypeName := "any" -}}
 {{ $responseTypeDefinitions := getResponseTypeDefinitions . -}}
 {{ $hasRespType := ge ($responseTypeDefinitions | len) 1 -}}
@@ -95,22 +182,20 @@ type {{ $iface }} interface {
 {{ $responseTypeName = (index $responseTypeDefinitions 0).Schema.GoType -}}
 {{ end -}}
   {{ toGoComment $op.Spec.Description "" }}
-  {{ $op | convertOperationWithTag $tag }}(ctx context.Context
-    {{- $op.PathParams | genParamArgs -}}
-    {{if $op.RequiresParamObject}}, params *{{$op.OperationId}}Params{{ end -}}
+  {{ $localOpid }}({{block "params" $op }}ctx context.Context
+    {{- .PathParams | genParamArgs -}}
+    {{if .RequiresParamObject}}, params *{{.OperationId}}Params{{ end -}}
+    {{if .BodyRequired}}, body *{{ (.Bodies | bestBody).Schema.GoType }}{{ end -}}
+    {{- end -}}{{/*- end block params -*/}}
   {{- if $hasRespType -}}
   ) (*{{ $responseTypeName }}, error)
 {{- else -}}
   ) error
 {{- end }}
+  // {{ $localOpid }}Response is a lower level version of [{{ $localOpid }}] and provides access to the raw [resty.Response]
+  {{ $localOpid }}Response({{ template "params" $op }}) (*resty.Response, error)
 
-  // Returns the [resty.Response] for {{ $op | convertOperationWithTag $tag }}
-  {{ $op | convertOperationWithTag $tag }}Response(ctx context.Context
-    {{- $op.PathParams | genParamArgs -}}
-    {{if $op.RequiresParamObject}}, params *{{$op.OperationId}}Params{{ end -}}
-  ) (*resty.Response, error)
-
-{{- end}}
+{{ end -}}
 }
 var _ {{ $iface }} = (*{{ $class }})(nil)
 {{end}}{{/* operationsByTag -*/}}
