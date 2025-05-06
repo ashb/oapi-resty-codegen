@@ -1,4 +1,4 @@
-openapi: 3.0.0
+openapi: 3.0.3
 info:
   title: Airflow Task Execution API
   description: The private Airflow Task Execution API.
