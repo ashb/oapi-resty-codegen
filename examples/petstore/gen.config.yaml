@@ -9,8 +9,7 @@ generate:
   models: true
   client: true
 output-options:
+  # To make test coverage better, we only include the endpoints we want to test!
+  include-operation-ids: [addPet, deletePet]
   # overlay:
   #   path: overlay.yml
-  # user-templates:
-  #   client-with-responses.tmpl: _templates/client-with-responses.tmpl
-  #   client.tmpl: _templates/client.tmpl
