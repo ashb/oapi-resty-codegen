@@ -1,1 +1,2 @@
 oapi-resty-codegen
+examples/petstore/client.gen.go

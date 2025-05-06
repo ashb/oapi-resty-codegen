@@ -2,10 +2,14 @@ package petstore
 
 import (
 	"context"
+	"errors"
+	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/jarcoal/httpmock"
 	"github.com/stretchr/testify/suite"
+	"resty.dev/v3"
 )
 
 type PetStoreSuite struct {
@@ -24,6 +28,30 @@ func (suite *PetStoreSuite) SetupTest() {
 
 func TestPetStoreSuite(t *testing.T) {
 	suite.Run(t, new(PetStoreSuite))
+}
+
+func (suite *PetStoreSuite) TestInterfaces() {
+	// Since the client code is generated, we make "copies" of this code to ensure that the client we generate
+	// maintains the inteface we desire
+
+	type DesiredPetClient interface {
+		Add(ctx context.Context, body *Pet) (*Pet, error)
+		AddResponse(ctx context.Context, body *Pet) (*resty.Response, error)
+
+		Delete(ctx context.Context, petId int64, params *DeletePetParams) error
+		DeleteResponse(ctx context.Context, petId int64, params *DeletePetParams) (*resty.Response, error)
+	}
+
+	type DesiredClientInterface interface {
+		Pet() PetClient
+	}
+
+	_, ok := suite.client.(DesiredClientInterface)
+
+	suite.Require().True(ok, "ClientInterface implements DesiredClientInterface")
+
+	_, ok = suite.client.Pet().(DesiredPetClient)
+	suite.True(ok, "PetClient implements DesiredPetClient")
 }
 
 func (suite *PetStoreSuite) TestAddOk() {
@@ -83,12 +111,32 @@ func (suite *PetStoreSuite) TestAddResponseErrorJSON() {
 	suite.Equal(map[string]any{"error": "uh-oh"}, target.JSON)
 }
 
-func (suite *PetStoreSuite) TestDelete() {
-	suite.transport.RegisterResponder("DELETE", "/pet/12",
-		httpmock.NewBytesResponder(200, nil),
+func (suite *PetStoreSuite) TestNetworkErrors() {
+	suite.transport.RegisterResponder("POST", "/pet",
+		func(req *http.Request) (*http.Response, error) {
+			return nil, errors.New("some network timeout")
+		},
 	)
+	resp, err := suite.client.Pet().AddResponse(context.Background(), &Pet{})
+
+	suite.Equal(1, suite.transport.GetTotalCallCount())
+
+	suite.NotNil(resp, "Resp object is returned even in case of network error")
+	target := &url.Error{}
+	suite.Require().ErrorAs(err, &target)
+	suite.EqualError(err, `Post "http://invalid.localdomain/pet": some network timeout`)
+}
+
+func (suite *PetStoreSuite) TestDelete() {
 	apiKey := "abc"
 	params := DeletePetParams{ApiKey: &apiKey}
+
+	matcher := httpmock.NewMatcher("", func(req *http.Request) bool {
+		return req.Header.Get("api_key") == apiKey
+	})
+	suite.transport.RegisterMatcherResponder("DELETE", "/pet/12", matcher,
+		httpmock.NewBytesResponder(200, nil),
+	)
 	err := suite.client.Pet().Delete(context.Background(), 12, &params)
 	suite.Nil(err)
 }

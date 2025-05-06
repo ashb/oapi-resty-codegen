@@ -45,11 +45,16 @@ jobs:
         go-version: ${{ matrix.version }}
     - name: Run tests
       run: |
-        just test -f github-actions --jsonfile testrun.json
+        just test -f github-actions --jsonfile testrun.json -- -coverprofile=cover.out ./...
     - name: Report
       uses: mcous/go-test-annotations@c88dae7c338c628e850685a0e8aa6a8fc2f4685d
       # Only upload annotations from 1.24 -- we can manually go and look for other failures
       if: ${{ !cancelled() && matrix.version == '1.24' }}
       with:
         test-report: testrun.json
+    - name: Report Coveralls
+      uses: coverallsapp/github-action@v2
+      if: ${{ !cancelled() && matrix.version == '1.24' }}
+      with:
+        file: cover.out
 
