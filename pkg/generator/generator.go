@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 
+	"github.com/ashb/oapi-resty-codegen/pkg/openapi31downgrade"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/oapi-codegen/oapi-codegen/v2/pkg/codegen"
 	"github.com/oapi-codegen/oapi-codegen/v2/pkg/util"
@@ -51,6 +52,14 @@ func Generate(opts GenerateArgs) (string, error) {
 	}
 	if opts.Spec == nil {
 		return "", fmt.Errorf("one of spec or input filename must be provided")
+	}
+
+	if opts.Spec.OpenAPI == "3.1.0" {
+		var err error
+		opts.Spec, err = openapi31downgrade.DowngradeTo3_0(opts.Spec)
+		if err != nil {
+			return "", fmt.Errorf("error downgrading spec in %q to OpenAPI 3.0.0\n: %w", opts.Input, err)
+		}
 	}
 
 	dirName := "templates"
