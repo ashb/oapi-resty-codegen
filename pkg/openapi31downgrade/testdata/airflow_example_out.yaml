@@ -1,0 +1,1184 @@
+openapi: 3.0.3
+info:
+  title: Airflow Task Execution API
+  description: The private Airflow Task Execution API.
+  version: "2025-04-11"
+servers:
+  - url: /execution
+paths:
+  /asset-events/by-asset:
+    get:
+      tags:
+        - Asset Events
+      summary: Get Asset Event By Asset Name Uri
+      operationId: get_asset_event_by_asset_name_uri
+      parameters:
+        - name: name
+          in: query
+          description: The name of the Asset
+          required: true
+          schema:
+            title: Name
+            description: The name of the Asset
+            type: string
+            nullable: true
+        - name: uri
+          in: query
+          description: The URI of the Asset
+          required: true
+          schema:
+            title: Uri
+            description: The URI of the Asset
+            type: string
+            nullable: true
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetEventsResponse'
+  /assets/by-name:
+    get:
+      tags:
+        - Assets
+      summary: Get Asset By Name
+      description: Get an Airflow Asset by `name`.
+      operationId: get_asset_by_name
+      parameters:
+        - name: name
+          in: query
+          description: The name of the Asset
+          required: true
+          schema:
+            type: string
+            title: Name
+            description: The name of the Asset
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /task-instances/count:
+    get:
+      tags:
+        - Task Instances
+      summary: Get Task Instance Count
+      description: Get the count of task instances matching the given criteria.
+      operationId: get_task_instance_count
+      parameters:
+        - name: dag_id
+          in: query
+          required: true
+          schema:
+            type: string
+            title: Dag Id
+        - name: task_ids
+          in: query
+          schema:
+            title: Task Ids
+            type: array
+            items:
+              type: string
+            nullable: true
+        - name: task_group_id
+          in: query
+          schema:
+            title: Task Group Id
+            type: string
+            nullable: true
+        - name: logical_dates
+          in: query
+          schema:
+            title: Logical Dates
+            type: array
+            items:
+              type: string
+              format: date-time
+            nullable: true
+        - name: run_ids
+          in: query
+          schema:
+            title: Run Ids
+            type: array
+            items:
+              type: string
+            nullable: true
+        - name: states
+          in: query
+          schema:
+            title: States
+            type: array
+            items:
+              type: string
+            nullable: true
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: integer
+                title: Response Get Task Instance Count
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /task-instances/states:
+    get:
+      tags:
+        - Task Instances
+      summary: Get Task Instance States
+      description: Get the states for Task Instances with the given criteria.
+      operationId: get_task_instance_states
+      parameters:
+        - name: dag_id
+          in: query
+          required: true
+          schema:
+            type: string
+            title: Dag Id
+        - name: task_ids
+          in: query
+          schema:
+            title: Task Ids
+            type: array
+            items:
+              type: string
+            nullable: true
+        - name: task_group_id
+          in: query
+          schema:
+            title: Task Group Id
+            type: string
+            nullable: true
+        - name: logical_dates
+          in: query
+          schema:
+            title: Logical Dates
+            type: array
+            items:
+              type: string
+              format: date-time
+            nullable: true
+        - name: run_ids
+          in: query
+          schema:
+            title: Run Ids
+            type: array
+            items:
+              type: string
+            nullable: true
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskStatesResponse'
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /task-instances/{task_instance_id}/heartbeat:
+    put:
+      tags:
+        - Task Instances
+      summary: Ti Heartbeat
+      description: Update the heartbeat of a TaskInstance to mark it as alive & still running.
+      operationId: ti_heartbeat
+      parameters:
+        - name: task_instance_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Task Instance Id
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TIHeartbeatInfo'
+        required: true
+      responses:
+        "204":
+          description: Successful Response
+        "404":
+          description: Task Instance not found
+        "409":
+          description: The TI attempting to heartbeat should be terminated for the given reason
+        "422":
+          description: Invalid payload for the state transition
+  /task-instances/{task_instance_id}/previous-successful-dagrun:
+    get:
+      tags:
+        - Task Instances
+      summary: Get Previous Successful Dagrun
+      description: |-
+        Get the previous successful DagRun for a TaskInstance.
+
+        The data from this endpoint is used to get values for Task Context.
+      operationId: get_previous_successful_dagrun
+      parameters:
+        - name: task_instance_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Task Instance Id
+            format: uuid
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrevSuccessfulDagRunResponse'
+        "404":
+          description: Task Instance or Dag Run not found
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /task-instances/{task_instance_id}/rtif:
+    put:
+      tags:
+        - Task Instances
+      summary: Ti Put Rtif
+      description: Add an RTIF entry for a task instance, sent by the worker.
+      operationId: ti_put_rtif
+      parameters:
+        - name: task_instance_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Task Instance Id
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              title: Put Rtif Payload
+              additionalProperties:
+                $ref: '#/components/schemas/JsonValue'
+        required: true
+      responses:
+        "201":
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        "404":
+          description: Task Instance not found
+        "422":
+          description: Invalid payload for the setting rendered task instance fields
+  /task-instances/{task_instance_id}/run:
+    patch:
+      tags:
+        - Task Instances
+      summary: Ti Run
+      description: |-
+        Run a TaskInstance.
+
+        This endpoint is used to start a TaskInstance that is in the QUEUED state.
+      operationId: ti_run
+      parameters:
+        - name: task_instance_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Task Instance Id
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TIEnterRunningPayload'
+        required: true
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TIRunContext'
+        "404":
+          description: Task Instance not found
+        "409":
+          description: The TI is already in the requested state
+        "422":
+          description: Invalid payload for the state transition
+  /task-instances/{task_instance_id}/state:
+    patch:
+      tags:
+        - Task Instances
+      summary: Ti Update State
+      description: |-
+        Update the state of a TaskInstance.
+
+        Not all state transitions are valid, and transitioning to some states requires extra information to be
+        passed along. (Check out the datamodels for details, the rendered docs might not reflect this accurately)
+      operationId: ti_update_state
+      parameters:
+        - name: task_instance_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Task Instance Id
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/TITerminalStatePayload'
+                - $ref: '#/components/schemas/TISuccessStatePayload'
+                - $ref: '#/components/schemas/TITargetStatePayload'
+                - $ref: '#/components/schemas/TIDeferredStatePayload'
+                - $ref: '#/components/schemas/TIRescheduleStatePayload'
+                - $ref: '#/components/schemas/TIRetryStatePayload'
+              title: Ti Patch Payload
+        required: true
+      responses:
+        "204":
+          description: Successful Response
+        "404":
+          description: Task Instance not found
+        "409":
+          description: The TI is already in the requested state
+        "422":
+          description: Invalid payload for the state transition
+  /task-reschedules/{task_instance_id}/start_date:
+    get:
+      tags:
+        - Task Reschedules
+      summary: Get Start Date
+      description: Get the first reschedule date if found, None if no records exist.
+      operationId: get_start_date
+      parameters:
+        - name: task_instance_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Task Instance Id
+            format: uuid
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Get Start Date
+                type: string
+                format: date-time
+                nullable: true
+        "401":
+          description: Unauthorized
+        "404":
+          description: Task Instance not found
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /variables/{variable_key}: {}
+  /xcoms/{dag_id}/{run_id}/{task_id}/{key}:
+    post:
+      tags:
+        - XComs
+      summary: Set Xcom
+      description: Set an Airflow XCom.
+      operationId: set_xcom
+      parameters:
+        - name: dag_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Dag Id
+        - name: run_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Run Id
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Task Id
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Key
+        - name: map_index
+          in: query
+          schema:
+            type: integer
+            title: Map Index
+            default: -1
+        - name: mapped_length
+          in: query
+          description: Number of mapped tasks this value expands into
+          schema:
+            title: Mapped Length
+            description: Number of mapped tasks this value expands into
+            type: integer
+            nullable: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonValue'
+            examples:
+              dict_value:
+                summary: Dictionary value
+                value: '{"key2": "value2"}'
+              list_value:
+                summary: List value
+                value: '["value1"]'
+              simple_value:
+                summary: Simple value
+                value: '"value1"'
+        required: true
+      responses:
+        "201":
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        "401":
+          description: Unauthorized
+        "403":
+          description: Task does not have access to the XCom
+        "404":
+          description: XCom not found
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+        - XComs
+      summary: Delete Xcom
+      description: Delete a single XCom Value
+      operationId: delete_xcom
+      parameters:
+        - name: dag_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Dag Id
+        - name: run_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Run Id
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Task Id
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Key
+        - name: map_index
+          in: query
+          schema:
+            type: integer
+            title: Map Index
+            default: -1
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        "401":
+          description: Unauthorized
+        "403":
+          description: Task does not have access to the XCom
+        "404":
+          description: XCom not found
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    head:
+      tags:
+        - XComs
+      summary: Head Xcom
+      description: Returns the count of mapped XCom values found in the `Content-Range` response header
+      operationId: head_xcom
+      parameters:
+        - name: dag_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Dag Id
+        - name: run_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Run Id
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Task Id
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Key
+        - name: map_index
+          in: query
+          schema:
+            title: Map Index
+            type: integer
+            nullable: true
+      responses:
+        "200":
+          description: Metadata about the number of matching XCom values
+          headers:
+            Content-Range:
+              description: The number of (mapped) XCom values found for this task.
+              schema:
+                pattern: ^map_indexes \d+$
+          content:
+            application/json:
+              schema:
+                title: Response Head Xcom
+                nullable: true
+        "401":
+          description: Unauthorized
+        "403":
+          description: Task does not have access to the XCom
+        "404":
+          description: XCom not found
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    AssetAliasReferenceAssetEventDagRun:
+      type: object
+      properties:
+        name:
+          type: string
+          title: Name
+      title: AssetAliasReferenceAssetEventDagRun
+      required:
+        - name
+      additionalProperties: false
+      description: Schema for AssetAliasModel used in AssetEventDagRunReference.
+    AssetEventDagRunReference:
+      type: object
+      properties:
+        asset:
+          $ref: '#/components/schemas/AssetReferenceAssetEventDagRun'
+        extra:
+          type: object
+          title: Extra
+          additionalProperties: true
+        source_aliases:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetAliasReferenceAssetEventDagRun'
+          title: Source Aliases
+        source_dag_id:
+          title: Source Dag Id
+          type: string
+          nullable: true
+        source_map_index:
+          title: Source Map Index
+          type: integer
+          nullable: true
+        source_run_id:
+          title: Source Run Id
+          type: string
+          nullable: true
+        source_task_id:
+          title: Source Task Id
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          title: Timestamp
+          format: date-time
+      title: AssetEventDagRunReference
+      required:
+        - asset
+        - extra
+        - source_task_id
+        - source_dag_id
+        - source_run_id
+        - source_map_index
+        - source_aliases
+        - timestamp
+      additionalProperties: false
+      description: Schema for AssetEvent model used in DagRun.
+    AssetEventResponse:
+      type: object
+      properties:
+        asset:
+          $ref: '#/components/schemas/AssetResponse'
+        extra:
+          title: Extra
+          type: object
+          additionalProperties: true
+          nullable: true
+        id:
+          type: integer
+          title: Id
+        source_dag_id:
+          title: Source Dag Id
+          type: string
+          nullable: true
+        source_map_index:
+          type: integer
+          title: Source Map Index
+          default: -1
+        source_run_id:
+          title: Source Run Id
+          type: string
+          nullable: true
+        source_task_id:
+          title: Source Task Id
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          title: Timestamp
+          format: date-time
+      title: AssetEventResponse
+      required:
+        - id
+        - timestamp
+        - asset
+      description: Asset event schema with fields that are needed for Runtime.
+    AssetEventsResponse:
+      type: object
+      properties:
+        asset_events:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetEventResponse'
+          title: Asset Events
+      title: AssetEventsResponse
+      required:
+        - asset_events
+      description: Collection of AssetEventResponse.
+    AssetProfile:
+      type: object
+      properties:
+        name:
+          title: Name
+          type: string
+          nullable: true
+        type:
+          type: string
+          title: Type
+        uri:
+          title: Uri
+          type: string
+          nullable: true
+      title: AssetProfile
+      required:
+        - type
+      additionalProperties: false
+      description: |-
+        Profile of an asset-like object.
+
+        Asset will have name, uri defined, with type set to 'Asset'.
+        AssetNameRef will have name defined, type set to 'AssetNameRef'.
+        AssetUriRef will have uri defined, type set to 'AssetUriRef'.
+        AssetAlias will have name defined, type set to 'AssetAlias'.
+
+        Note that 'type' here is distinct from 'asset_type' the user declares on an
+        Asset (or subclass). This field is for distinguishing between different
+        asset-related types (Asset, AssetRef, or AssetAlias).
+    AssetReferenceAssetEventDagRun:
+      type: object
+      properties:
+        extra:
+          type: object
+          title: Extra
+          additionalProperties: true
+        name:
+          type: string
+          title: Name
+        uri:
+          type: string
+          title: Uri
+      title: AssetReferenceAssetEventDagRun
+      required:
+        - name
+        - uri
+        - extra
+      additionalProperties: false
+      description: Schema for AssetModel used in AssetEventDagRunReference.
+    AssetResponse:
+      type: object
+      properties:
+        extra:
+          title: Extra
+          type: object
+          additionalProperties: true
+          nullable: true
+        group:
+          type: string
+          title: Group
+        name:
+          type: string
+          title: Name
+        uri:
+          type: string
+          title: Uri
+      title: AssetResponse
+      required:
+        - name
+        - uri
+        - group
+      description: Asset schema for responses with fields that are needed for Runtime.
+    DagRunState:
+      type: string
+      title: DagRunState
+      enum:
+        - queued
+        - running
+        - success
+        - failed
+      description: |-
+        All possible states that a DagRun can be in.
+
+        These are "shared" with TaskInstanceState in some parts of the code,
+        so please ensure that their values always match the ones with the
+        same name in TaskInstanceState.
+    DagRunStateResponse:
+      type: object
+      properties:
+        state:
+          $ref: '#/components/schemas/DagRunState'
+      title: DagRunStateResponse
+      required:
+        - state
+      description: Schema for DAG Run State response.
+    DagRunType:
+      type: string
+      title: DagRunType
+      enum:
+        - backfill
+        - scheduled
+        - manual
+        - asset_triggered
+      description: Class with DagRun types.
+    HTTPValidationError:
+      type: object
+      properties:
+        detail:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          title: Detail
+      title: HTTPValidationError
+    IntermediateTIState:
+      type: string
+      title: IntermediateTIState
+      enum:
+        - scheduled
+        - queued
+        - restarting
+        - up_for_retry
+        - up_for_reschedule
+        - upstream_failed
+        - deferred
+      description: States that a Task Instance can be in that indicate it is not yet in a terminal or running state.
+    JsonValue:
+      oneOf:
+        - type: string
+        - type: number
+        - type: integer
+        - type: object
+        - type: array
+        - type: boolean
+      title: Any valid JSON value
+      nullable: true
+    PrevSuccessfulDagRunResponse:
+      type: object
+      properties:
+        data_interval_end:
+          title: Data Interval End
+          type: string
+          format: date-time
+          nullable: true
+        data_interval_start:
+          title: Data Interval Start
+          type: string
+          format: date-time
+          nullable: true
+        end_date:
+          title: End Date
+          type: string
+          format: date-time
+          nullable: true
+        start_date:
+          title: Start Date
+          type: string
+          format: date-time
+          nullable: true
+      title: PrevSuccessfulDagRunResponse
+      description: Schema for response with previous successful DagRun information for Task Template Context.
+    TIDeferredStatePayload:
+      type: object
+      properties:
+        classpath:
+          type: string
+          title: Classpath
+        next_kwargs:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: string
+          title: Next Kwargs
+        next_method:
+          type: string
+          title: Next Method
+        state:
+          type: string
+          title: State
+          enum:
+            - deferred
+          default: deferred
+        trigger_kwargs:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: string
+          title: Trigger Kwargs
+        trigger_timeout:
+          title: Trigger Timeout
+          type: string
+          format: duration
+          nullable: true
+      title: TIDeferredStatePayload
+      required:
+        - state
+        - classpath
+        - next_method
+      additionalProperties: false
+      description: Schema for updating TaskInstance to a deferred state.
+    TIEnterRunningPayload:
+      type: object
+      properties:
+        hostname:
+          type: string
+          title: Hostname
+        pid:
+          type: integer
+          title: Pid
+        start_date:
+          type: string
+          title: Start Date
+          format: date-time
+        state:
+          type: string
+          title: State
+          enum:
+            - running
+          default: running
+        unixname:
+          type: string
+          title: Unixname
+      title: TIEnterRunningPayload
+      required:
+        - state
+        - hostname
+        - unixname
+        - pid
+        - start_date
+      additionalProperties: false
+      description: Schema for updating TaskInstance to 'RUNNING' state with minimal required fields.
+    TIHeartbeatInfo:
+      type: object
+      properties:
+        hostname:
+          type: string
+          title: Hostname
+        pid:
+          type: integer
+          title: Pid
+      title: TIHeartbeatInfo
+      required:
+        - hostname
+        - pid
+      additionalProperties: false
+      description: Schema for TaskInstance heartbeat endpoint.
+    TIRescheduleStatePayload:
+      type: object
+      properties:
+        end_date:
+          type: string
+          title: End Date
+          format: date-time
+        reschedule_date:
+          type: string
+          title: Reschedule Date
+          format: date-time
+        state:
+          type: string
+          title: State
+          enum:
+            - up_for_reschedule
+          default: up_for_reschedule
+      title: TIRescheduleStatePayload
+      required:
+        - state
+        - reschedule_date
+        - end_date
+      additionalProperties: false
+      description: Schema for updating TaskInstance to a up_for_reschedule state.
+    TIRetryStatePayload:
+      type: object
+      properties:
+        end_date:
+          type: string
+          title: End Date
+          format: date-time
+        state:
+          type: string
+          title: State
+          enum:
+            - up_for_retry
+          default: up_for_retry
+      title: TIRetryStatePayload
+      required:
+        - state
+        - end_date
+      additionalProperties: false
+      description: Schema for updating TaskInstance to up_for_retry.
+    TIRunContext:
+      type: object
+      properties:
+        max_tries:
+          type: integer
+          title: Max Tries
+        next_kwargs:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: string
+          title: Next Kwargs
+          nullable: true
+        next_method:
+          title: Next Method
+          type: string
+          nullable: true
+        should_retry:
+          type: boolean
+          title: Should Retry
+        task_reschedule_count:
+          type: integer
+          title: Task Reschedule Count
+          default: 0
+        upstream_map_indexes:
+          title: Upstream Map Indexes
+          type: object
+          additionalProperties:
+            type: integer
+          nullable: true
+        xcom_keys_to_clear:
+          type: array
+          items:
+            type: string
+          title: Xcom Keys To Clear
+      title: TIRunContext
+      required:
+        - dag_run
+        - max_tries
+        - should_retry
+      description: Response schema for TaskInstance run context.
+    TISuccessStatePayload:
+      type: object
+      properties:
+        end_date:
+          type: string
+          title: End Date
+          format: date-time
+        outlet_events:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+          title: Outlet Events
+        state:
+          type: string
+          title: State
+          enum:
+            - success
+          default: success
+        task_outlets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetProfile'
+          title: Task Outlets
+      title: TISuccessStatePayload
+      required:
+        - state
+        - end_date
+      additionalProperties: false
+      description: Schema for updating TaskInstance to success state.
+    TITargetStatePayload:
+      type: object
+      properties:
+        state:
+          $ref: '#/components/schemas/IntermediateTIState'
+      title: TITargetStatePayload
+      required:
+        - state
+      additionalProperties: false
+      description: Schema for updating TaskInstance to a target state, excluding terminal and running states.
+    TITerminalStatePayload:
+      type: object
+      properties:
+        end_date:
+          type: string
+          title: End Date
+          format: date-time
+        state:
+          $ref: '#/components/schemas/TerminalStateNonSuccess'
+      title: TITerminalStatePayload
+      required:
+        - state
+        - end_date
+      additionalProperties: false
+      description: Schema for updating TaskInstance to a terminal state except SUCCESS state.
+    TaskInstance:
+      type: object
+      properties:
+        context_carrier:
+          title: Context Carrier
+          type: object
+          additionalProperties: true
+          nullable: true
+        dag_id:
+          type: string
+          title: Dag Id
+        hostname:
+          title: Hostname
+          type: string
+          nullable: true
+        id:
+          type: string
+          title: Id
+          format: uuid
+        map_index:
+          type: integer
+          title: Map Index
+          default: -1
+        run_id:
+          type: string
+          title: Run Id
+        task_id:
+          type: string
+          title: Task Id
+        try_number:
+          type: integer
+          title: Try Number
+      title: TaskInstance
+      required:
+        - id
+        - task_id
+        - dag_id
+        - run_id
+        - try_number
+      description: Schema for TaskInstance model with minimal required fields needed for Runtime.
+    TaskStatesResponse:
+      type: object
+      properties:
+        task_states:
+          type: object
+          title: Task States
+          additionalProperties: true
+      title: TaskStatesResponse
+      required:
+        - task_states
+      description: Response for task states with run_id, task and state.
+    TerminalStateNonSuccess:
+      type: string
+      title: TerminalStateNonSuccess
+      enum:
+        - failed
+        - skipped
+        - removed
+      description: TaskInstance states that can be reported without extra information.
+    TerminalTIState:
+      type: string
+      enum:
+        - success
+        - failed
+        - skipped
+        - removed
+    ValidationError:
+      type: object
+      properties:
+        loc:
+          type: array
+          items:
+            oneOf:
+              - type: string
+              - type: integer
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      title: ValidationError
+      required:
+        - loc
+        - msg
+        - type
+
