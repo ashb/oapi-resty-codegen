@@ -41,9 +41,14 @@ func (suite *PetStoreSuite) TestInterfaces() {
 		Delete(ctx context.Context, petId int64, params *DeletePetParams) error
 		DeleteResponse(ctx context.Context, petId int64, params *DeletePetParams) (*resty.Response, error)
 	}
+	type DesiredUserClient interface {
+		Create(ctx context.Context, body *User) (*User, error)
+		CreateResponse(ctx context.Context, body *User) (*resty.Response, error)
+	}
 
 	type DesiredClientInterface interface {
 		Pet() PetClient
+		User() UserClient
 	}
 
 	_, ok := suite.client.(DesiredClientInterface)
@@ -52,6 +57,9 @@ func (suite *PetStoreSuite) TestInterfaces() {
 
 	_, ok = suite.client.Pet().(DesiredPetClient)
 	suite.True(ok, "PetClient implements DesiredPetClient")
+
+	_, ok = suite.client.User().(DesiredUserClient)
+	suite.True(ok, "UserClient implements DesiredUserClient")
 }
 
 func (suite *PetStoreSuite) TestAddOk() {
@@ -138,5 +146,16 @@ func (suite *PetStoreSuite) TestDelete() {
 		httpmock.NewBytesResponder(200, nil),
 	)
 	err := suite.client.Pet().Delete(context.Background(), 12, &params)
+	suite.Nil(err)
+}
+
+func (suite *PetStoreSuite) TestCreateUser() {
+	body := &User{}
+
+	suite.transport.RegisterResponder("POST", "/user",
+		httpmock.NewJsonResponderOrPanic(200, body),
+	)
+
+	_, err := suite.client.User().Create(context.Background(), body)
 	suite.Nil(err)
 }

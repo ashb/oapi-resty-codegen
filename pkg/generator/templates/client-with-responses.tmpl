@@ -1,7 +1,7 @@
 {{define "fnParams" }}ctx context.Context
     {{- .PathParams | genParamArgs -}}
     {{if .RequiresParamObject}}, params *{{.OperationId}}Params{{ end -}}
-    {{if .BodyRequired}}, body *{{ (.Bodies | bestBody).Schema.GoType }}{{ end -}}
+    {{if .HasBody}}, body *{{ (.Bodies | bestBody).Schema.GoType }}{{ end -}}
     {{- end -}}{{/*- end block params -*/}}
 
 
@@ -126,6 +126,7 @@ func (c *{{ $class }}) {{ $localOpid }}Response({{ template "fnParams" . }}) (re
     }
     {{ end -}}
     resp, err = c.R().
+      SetContext(ctx).
     {{- range $paramIdx, $param := .PathParams}}
       SetPathParam("{{ $param.ParamName }}", pathParam{{$paramIdx}}).{{end}}
     {{ range $paramIdx, $param := .Params -}}
@@ -135,7 +136,7 @@ func (c *{{ $class }}) {{ $localOpid }}Response({{ template "fnParams" . }}) (re
     SetQueryParam({{printf "%q" $param.ParamName}}, param{{$paramIdx}}).
     {{ end -}}
     {{- end -}}{{/* range .Params */}}
-    {{if .BodyRequired }}SetBody(body).{{ end}}
+    {{if .HasBody }}SetBody(body).{{ end}}
     {{- if $hasRespType }}
       SetResult(&res).
     {{- end }}
@@ -151,7 +152,7 @@ func (c *{{ $class }}) {{ $localOpid }}({{ template "fnParams" . -}}
   ) (*{{ $responseTypeName }}, error) {
     res, err := c.{{ $localOpid }}Response(ctx{{genParamNames .PathParams}}
       {{- if .RequiresParamObject}}, params{{ end -}}
-      {{- if .BodyRequired }}, body{{ end }})
+      {{- if .HasBody }}, body{{ end }})
     if err != nil {
       return nil, err
     }
@@ -159,7 +160,7 @@ func (c *{{ $class }}) {{ $localOpid }}({{ template "fnParams" . -}}
     return res.Result().(*{{ $responseTypeName }}), nil
 {{- else -}}
   ) error {
-    _, err := c.{{ $localOpid }}Response(ctx{{genParamNames .PathParams}}{{if .RequiresParamObject}}, params{{ end -}})
+    _, err := c.{{ $localOpid }}Response(ctx{{genParamNames .PathParams}}{{if .RequiresParamObject}}, params{{ end -}}{{- if .HasBody }}, body{{ end }})
     return err
 {{- end }}
 }
@@ -185,7 +186,7 @@ type {{ $iface }} interface {
   {{ $localOpid }}({{block "params" $op }}ctx context.Context
     {{- .PathParams | genParamArgs -}}
     {{if .RequiresParamObject}}, params *{{.OperationId}}Params{{ end -}}
-    {{if .BodyRequired}}, body *{{ (.Bodies | bestBody).Schema.GoType }}{{ end -}}
+    {{if .HasBody}}, body *{{ (.Bodies | bestBody).Schema.GoType }}{{ end -}}
     {{- end -}}{{/*- end block params -*/}}
   {{- if $hasRespType -}}
   ) (*{{ $responseTypeName }}, error)
