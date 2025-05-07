@@ -35,14 +35,13 @@ func New{{ $clientTypeName }}(server string, opts ...ClientOption) ({{ $clientTy
 	return &client, nil
 }
 
-// WithHTTPClient allows overriding the default Doer, which is
-// automatically created using http.Client. This is useful for tests.
+// WithClient allows overriding the default [resty.Client], which is
+// automatically created using http.Client.
 //
-// This will re-create the resty Client, so this should appear before any
-// middleware is added
-func WithHTTPClient(hc *http.Client) ClientOption {
+// If this is used the `server` base URL argument passed in will not be respected anymore
+func WithClient(r *resty.Client) ClientOption {
 	return func(c *{{ $clientTypeName }}) error {
-		c.Client = resty.NewWithClient(hc)
+		c.Client = r
 		return nil
 	}
 }
