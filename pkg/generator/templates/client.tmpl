@@ -9,6 +9,8 @@ type {{ $clientTypeName }} struct {
 	Server string
 
 	*resty.Client
+
+	RequestMiddleware []resty.RequestMiddleware
 }
 // ClientOption allows setting custom parameters during construction
 type ClientOption func(*{{ $clientTypeName }}) error
@@ -58,6 +60,7 @@ func WithRoundTripper(transport http.RoundTripper) ClientOption {
 // called right before sending the request. This can be used to mutate the request.
 func WithRequestMiddleware(mw resty.RequestMiddleware) ClientOption {
 	return func(c *{{ $clientTypeName }}) error {
+		c.RequestMiddleware = append(c.RequestMiddleware, mw)
 		c.Client = c.Client.AddRequestMiddleware(mw)
 		return nil
 	}
