@@ -18,10 +18,12 @@ type PetStoreSuite struct {
 	client    ClientInterface
 }
 
+const Prefix = "http://invalid.localdomain/prefix"
+
 func (suite *PetStoreSuite) SetupTest() {
 	var err error
 	suite.transport = httpmock.NewMockTransport()
-	suite.client, err = NewClient("http://invalid.localdomain/", WithRoundTripper(suite.transport))
+	suite.client, err = NewClient(Prefix, WithRoundTripper(suite.transport))
 
 	suite.Require().Nil(err)
 }
@@ -63,7 +65,7 @@ func (suite *PetStoreSuite) TestInterfaces() {
 }
 
 func (suite *PetStoreSuite) TestAddOk() {
-	suite.transport.RegisterResponder("POST", "/pet",
+	suite.transport.RegisterResponder("POST", Prefix+"/pet",
 		httpmock.NewJsonResponderOrPanic(200, map[string]any{
 			"id":        123,
 			"name":      "Midnight",
@@ -89,7 +91,7 @@ func (suite *PetStoreSuite) TestAddOk() {
 func (suite *PetStoreSuite) TestAddResponseErrorHTML() {
 	suite.transport.RegisterResponder(
 		"POST",
-		"/pet",
+		Prefix+"/pet",
 		httpmock.NewStringResponder(500, "<html><body><h1>Internal Server Error"),
 	)
 
@@ -104,7 +106,7 @@ func (suite *PetStoreSuite) TestAddResponseErrorHTML() {
 }
 
 func (suite *PetStoreSuite) TestAddResponseErrorJSON() {
-	suite.transport.RegisterResponder("POST", "/pet",
+	suite.transport.RegisterResponder("POST", Prefix+"/pet",
 		httpmock.NewJsonResponderOrPanic(404, map[string]any{
 			"error": "uh-oh",
 		}),
@@ -120,7 +122,7 @@ func (suite *PetStoreSuite) TestAddResponseErrorJSON() {
 }
 
 func (suite *PetStoreSuite) TestNetworkErrors() {
-	suite.transport.RegisterResponder("POST", "/pet",
+	suite.transport.RegisterResponder("POST", Prefix+"/pet",
 		func(req *http.Request) (*http.Response, error) {
 			return nil, errors.New("some network timeout")
 		},
@@ -132,7 +134,7 @@ func (suite *PetStoreSuite) TestNetworkErrors() {
 	suite.NotNil(resp, "Resp object is returned even in case of network error")
 	target := &url.Error{}
 	suite.Require().ErrorAs(err, &target)
-	suite.EqualError(err, `Post "http://invalid.localdomain/pet": some network timeout`)
+	suite.EqualError(err, `Post "http://invalid.localdomain/prefix/pet": some network timeout`)
 }
 
 func (suite *PetStoreSuite) TestDelete() {
@@ -142,7 +144,7 @@ func (suite *PetStoreSuite) TestDelete() {
 	matcher := httpmock.NewMatcher("", func(req *http.Request) bool {
 		return req.Header.Get("api_key") == apiKey
 	})
-	suite.transport.RegisterMatcherResponder("DELETE", "/pet/12", matcher,
+	suite.transport.RegisterMatcherResponder("DELETE", Prefix+"/pet/12", matcher,
 		httpmock.NewBytesResponder(200, nil),
 	)
 	err := suite.client.Pet().Delete(context.Background(), 12, &params)
@@ -152,7 +154,7 @@ func (suite *PetStoreSuite) TestDelete() {
 func (suite *PetStoreSuite) TestCreateUser() {
 	body := &User{}
 
-	suite.transport.RegisterResponder("POST", "/user",
+	suite.transport.RegisterResponder("POST", Prefix+"/user",
 		httpmock.NewJsonResponderOrPanic(200, body),
 	)
 

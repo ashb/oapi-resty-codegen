@@ -140,7 +140,13 @@ func (c *{{ $class }}) {{ $localOpid }}Response({{ template "fnParams" . }}) (re
     {{- if $hasRespType }}
       SetResult(&res).
     {{- end }}
-      {{ $op.Method | lower | title }}("{{ .Path }}")
+      {{ $op.Method | lower | title }}("
+		{{- /* If .Path starts with '/' (0x2f) strip it off */ -}}
+		{{- if eq (index .Path 0) 0x2f -}}
+			{{ slice .Path 1 -}}
+		{{- else -}}
+			{{ .Path }}
+		{{- end }}")
     if err != nil {
         return resp, err
     }
