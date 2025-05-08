@@ -3,7 +3,7 @@ on: [ push, pull_request ]
 jobs:
   lint:
     # Don't run two jobs for a PR
-    if: "${{ github.event_name == 'pull_request' || github.head_ref }}"
+    if: "${{ github.event_name == 'pull_request' || github.ref_name == 'main' }}"
     name: Lint
     runs-on: ubuntu-latest
     steps:
@@ -27,7 +27,7 @@ jobs:
         SKIP: actionlint
   test:
     # Don't run two jobs for a PR
-    if: "${{ github.event_name == 'pull_request' || github.head_ref }}"
+    if: "${{ github.event_name == 'pull_request' || github.ref_name == 'main' }}"
     name: Test
     runs-on: ubuntu-latest
     strategy:
@@ -54,7 +54,8 @@ jobs:
         test-report: testrun.json
     - name: Report Coveralls
       uses: coverallsapp/github-action@v2
-      if: ${{ !cancelled() && matrix.version == '1.24' }}
+      # Don't run Coveralls locally when we are invoked via `act`
+      if: ${{ !cancelled() && matrix.version == '1.24' && env.ACT != 'true' }}
       with:
         file: cover.out
 

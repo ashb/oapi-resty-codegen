@@ -11,3 +11,12 @@ build:
 
 lint:
   pre-commit run --all-files --show-diff-on-failure --color=always
+
+[doc("""
+  Use nektos/act to run GHA workflows locally
+
+  Example: `just act --matrix=version:1.24
+""")]
+act *args:
+  # See .actrc for default flags
+  act {{args}}
