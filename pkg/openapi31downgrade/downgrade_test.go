@@ -60,7 +60,7 @@ func (s *Suite) TestDowngrade() {
 			convertedYAML = specToMap(output)
 
 			// We use gomega here as it gives better error indications
-			if diff := cmp.Diff(convertedYAML, expectedYAML); diff != "" {
+			if diff := cmp.Diff(expectedYAML, convertedYAML); diff != "" {
 				s.Failf("MakeGatewayInfo() mismatch (-want +got):\n%s", diff)
 			}
 			// g.Expect(actual).Should(gomega.MatchYAML(expected))

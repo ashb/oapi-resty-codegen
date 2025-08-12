@@ -1054,7 +1054,12 @@ components:
         upstream_map_indexes:
           oneOf:
             - additionalProperties:
-                type: integer
+                oneOf:
+                  - type: integer
+                  - items:
+                      type: integer
+                    type: array
+                  - type: "null"
               type: object
             - type: "null"
           title: Upstream Map Indexes
