@@ -1026,7 +1026,12 @@ components:
           title: Upstream Map Indexes
           type: object
           additionalProperties:
-            type: integer
+            oneOf:
+              - type: integer
+              - items:
+                  type: integer
+                type: array
+            nullable: true
           nullable: true
         xcom_keys_to_clear:
           type: array

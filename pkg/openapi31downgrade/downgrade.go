@@ -1,3 +1,7 @@
+/*
+Package openapi31downgrade attempts to "downgrade" Open API 3.1 documents to 3.0 to be fed in to the client
+generator
+*/
 package openapi31downgrade
 
 import (
@@ -154,6 +158,14 @@ func visitSchema(schema *base.Schema, loc []any) (*base.Schema, error) {
 			}
 			changed = true
 		}
+
+		for i := range schema.OneOf {
+			before := schema.OneOf[i]
+			visitSchemaProxy(&schema.OneOf[i], append(loc, "oneOf", i))
+			if schema.OneOf[i] != before {
+				changed = true
+			}
+		}
 	} else if len(schema.Type) == 1 && schema.Type[0] == "null" {
 		schema.Type = nil
 		nullable := true
@@ -161,6 +173,13 @@ func visitSchema(schema *base.Schema, loc []any) (*base.Schema, error) {
 		changed = true
 	}
 
+	if schema.AdditionalProperties != nil && schema.AdditionalProperties.IsA() {
+		before := schema.AdditionalProperties.A
+		visitSchemaProxy(&schema.AdditionalProperties.A, append(loc, "additionalProperties"))
+		if schema.AdditionalProperties.A != before {
+			changed = true
+		}
+	}
 	for name, propProxy := range schema.Properties.FromOldest() {
 		if propProxy.IsReference() {
 			continue
@@ -177,7 +196,6 @@ func visitSchema(schema *base.Schema, loc []any) (*base.Schema, error) {
 			}
 		}
 	}
-
 	if changed {
 		return schema, nil
 	}
