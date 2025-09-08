@@ -1,6 +1,6 @@
 # oapi-resty-codegen
 
-An OpenAPI client generator that provides "literate" programming, and
+An OpenAPI client generator (built on top of [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen)) that provides "literate" programming style clients
 
 The main goals are:
 
@@ -13,6 +13,12 @@ The main goals are:
   response as an error, which makes some sense for raw HTTP client, but as a
   REST API client, an http error should be reported as an error to the Go
   Code.
+
+- Provide "just enough" support of OpenAPI 3.1.
+
+  There are lots of changes in 3.1 that this won't support, but it does enough
+  that most simple uses of 3.1 will be understood. This was driven by wanting to
+  generate a client from Apache Airflow's 3.1/FastAPI-based oapi schema.  
 
 ## Example
 
