@@ -77,4 +77,27 @@ type {{ $clientTypeName }}Interface interface {
 	// {{ $tag | tagToClass }} deals with all the {{ $tag }} endpoints
 	{{ $tag | tagToClass }}() {{ $tag | tagToClass }}Client
 {{end}}{{/* operationsByTag -*/}}
+
+{{ printf "// %T\n" ( . | untaggedOperations) }}
+{{/*
+{{range $op := . | untaggedOperations -}}
+{{ $opid := .OperationId -}}
+{{ $responseTypeName := "any" -}}
+{{ $responseTypeDefinitions := getResponseTypeDefinitions . -}}
+{{ $hasRespType := ge ($responseTypeDefinitions | len) 1 -}}
+{{ if $hasRespType -}}
+{{ $responseTypeName = (index $responseTypeDefinitions 0).Schema.GoType -}}
+{{ end -}}
+	{{ toGoComment $op.Spec.Description "" }}
+	{{ $opid }}({{block "params" $op }}ctx context.Context
+		{{- .PathParams | genParamArgs -}}
+		{{if .RequiresParamObject}}, params *{{.OperationId}}Params{{ end -}}
+		{{if .HasBody}}, body *{{ (.Bodies | bestBody).Schema.GoType }}{{ end -}}
+		{{- end -}}{{/*- end block params -* /}}
+	{{- if $hasRespType -}}
+	) (*{{ $responseTypeName }}, error)
+{{- else -}}
+  ) error
+{{end -}}
+{{end}}{{/* untaggedOperations -*/}}
 }

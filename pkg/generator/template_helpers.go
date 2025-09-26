@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"iter"
 	"maps"
 	"strings"
 
@@ -17,11 +18,26 @@ func operationsByTag(defs []codegen.OperationDefinition) map[string][]codegen.Op
 		tag := ""
 		if len(def.Spec.Tags) >= 1 {
 			tag = def.Spec.Tags[0]
+		} else if len(def.Spec.Tags) == 0 {
+			continue
 		}
 		byTag[tag] = append(byTag[tag], def)
 
 	}
 	return byTag
+}
+
+func untaggedOperations(defs []codegen.OperationDefinition) iter.Seq[codegen.OperationDefinition] {
+	return func(yield func(codegen.OperationDefinition) bool) {
+		for _, def := range defs {
+			if len(def.Spec.Tags) > 0 {
+				continue
+			}
+			if !yield(def) {
+				return
+			}
+		}
+	}
 }
 
 func tagToClass(tag string) string {
@@ -73,6 +89,7 @@ func jsonTypeOrFirst[T any](items []T) T {
 func init() {
 	maps.Copy(codegen.TemplateFunctions, map[string]any{
 		"operationsByTag":         operationsByTag,
+		"untaggedOperations":      untaggedOperations,
 		"tagToClass":              tagToClass,
 		"convertOperationWithTag": convertOperationWithTag,
 		"bestBody":                jsonTypeOrFirst[codegen.RequestBodyDefinition],

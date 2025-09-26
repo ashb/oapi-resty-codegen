@@ -16,11 +16,19 @@ import (
 	v3 "github.com/pb33f/libopenapi/datamodel/high/v3"
 )
 
+type Options struct {
+	// Replace all `anyOf` in the schemas with `oneOf`.
+	//
+	// FastAPI by default generates `A | B` as a anyOf, which technically means it could be A & B. `oneOf` is
+	// often what we need
+	AnyOfToOneOf bool `yaml:"anyOf-to-oneOf"`
+}
+
 // DowngradeTo3_0 will attempt to downgrade the 3.1.x spec to v 3.0.3
 //
 // Only certain "transforms" are supported, and if the spec uses features that are not parsable/reresentable
 // by [openapi3.T] then the code flow won't even reach this far.
-func DowngradeTo3_0(spec *openapi3.T) (*openapi3.T, error) {
+func DowngradeTo3_0(spec *openapi3.T, opts Options) (*openapi3.T, error) {
 	if strings.HasPrefix(spec.OpenAPI, "3.0.") {
 		return spec, nil
 	}
@@ -34,7 +42,7 @@ func DowngradeTo3_0(spec *openapi3.T) (*openapi3.T, error) {
 		return nil, err
 	}
 
-	err = EditOpenAPISpec(doc)
+	err = EditOpenAPISpec(doc, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -52,29 +60,33 @@ func DowngradeTo3_0(spec *openapi3.T) (*openapi3.T, error) {
 	return loader.LoadFromData(blob)
 }
 
+type upgrader struct {
+	Options
+}
+
 // This _far_ from a complete conversion, it is just enough to get things working for the schema's I've
 // used.
 //
 // More examples welcome!
 
-func visitPaths(paths iter.Seq2[string, *v3.PathItem]) error {
+func (u *upgrader) visitPaths(paths iter.Seq2[string, *v3.PathItem]) error {
 	for path, item := range paths {
 		for method, spec := range item.GetOperations().FromOldest() {
 			loc := []any{path, method}
 			for idx, param := range spec.Parameters {
-				err := visitParam(param, append(loc, "parameters", idx))
+				err := u.visitParam(param, append(loc, "parameters", idx))
 				if err != nil {
 					return err
 				}
 			}
 			if spec.Responses.Default != nil {
-				err := visitResponse(spec.Responses.Default, append(loc, "responses", "default"))
+				err := u.visitResponse(spec.Responses.Default, append(loc, "responses", "default"))
 				if err != nil {
 					return err
 				}
 			}
 			for code, resp := range spec.Responses.Codes.FromNewest() {
-				err := visitResponse(resp, append(loc, "responses", code))
+				err := u.visitResponse(resp, append(loc, "responses", code))
 				if err != nil {
 					return err
 				}
@@ -84,9 +96,9 @@ func visitPaths(paths iter.Seq2[string, *v3.PathItem]) error {
 	return nil
 }
 
-func visitResponse(response *v3.Response, loc []any) error {
+func (u *upgrader) visitResponse(response *v3.Response, loc []any) error {
 	for ct, media := range response.Content.FromOldest() {
-		err := visitSchemaProxy(&media.Schema, append(loc, ct, "schema"))
+		err := u.visitSchemaProxy(&media.Schema, append(loc, ct, "schema"))
 		if err != nil {
 			return err
 		}
@@ -94,9 +106,9 @@ func visitResponse(response *v3.Response, loc []any) error {
 	return nil
 }
 
-func visitComponents(components *v3.Components) error {
+func (u *upgrader) visitComponents(components *v3.Components) error {
 	for name, resp := range components.Responses.FromOldest() {
-		err := visitResponse(resp, []any{"components", "responses", name})
+		err := u.visitResponse(resp, []any{"components", "responses", name})
 		if err != nil {
 			return err
 		}
@@ -107,7 +119,7 @@ func visitComponents(components *v3.Components) error {
 			continue
 		}
 		if schema := proxy.Schema(); schema != nil {
-			newSchema, err := visitSchema(schema, []any{"components", "schemas", name})
+			newSchema, err := u.visitSchema(schema, []any{"components", "schemas", name})
 			if err != nil {
 				return err
 			}
@@ -120,16 +132,16 @@ func visitComponents(components *v3.Components) error {
 	return nil
 }
 
-func visitParam(param *v3.Parameter, loc []any) error {
-	return visitSchemaProxy(&param.Schema, append(loc, "schema"))
+func (u *upgrader) visitParam(param *v3.Parameter, loc []any) error {
+	return u.visitSchemaProxy(&param.Schema, append(loc, "schema"))
 }
 
-func visitSchemaProxy(schemaProxy **base.SchemaProxy, loc []any) error {
+func (u *upgrader) visitSchemaProxy(schemaProxy **base.SchemaProxy, loc []any) error {
 	if (*schemaProxy).IsReference() {
 		return nil
 	}
 	if schema := (*schemaProxy).Schema(); schema != nil {
-		schema, err := visitSchema(schema, loc)
+		schema, err := u.visitSchema(schema, loc)
 		if err != nil {
 			return err
 		}
@@ -140,8 +152,14 @@ func visitSchemaProxy(schemaProxy **base.SchemaProxy, loc []any) error {
 	return nil
 }
 
-func visitSchema(schema *base.Schema, loc []any) (*base.Schema, error) {
+func (u *upgrader) visitSchema(schema *base.Schema, loc []any) (*base.Schema, error) {
 	changed := false
+
+	if len(schema.AnyOf) != 0 && u.Options.AnyOfToOneOf {
+		schema.OneOf = schema.AnyOf
+		schema.AnyOf = nil
+	}
+
 	if numOneOfs := len(schema.OneOf); numOneOfs > 0 {
 		lastType := schema.OneOf[numOneOfs-1].Schema().Type
 		if len(lastType) == 1 && lastType[0] == "null" {
@@ -161,7 +179,7 @@ func visitSchema(schema *base.Schema, loc []any) (*base.Schema, error) {
 
 		for i := range schema.OneOf {
 			before := schema.OneOf[i]
-			visitSchemaProxy(&schema.OneOf[i], append(loc, "oneOf", i))
+			u.visitSchemaProxy(&schema.OneOf[i], append(loc, "oneOf", i))
 			if schema.OneOf[i] != before {
 				changed = true
 			}
@@ -175,7 +193,7 @@ func visitSchema(schema *base.Schema, loc []any) (*base.Schema, error) {
 
 	if schema.AdditionalProperties != nil && schema.AdditionalProperties.IsA() {
 		before := schema.AdditionalProperties.A
-		visitSchemaProxy(&schema.AdditionalProperties.A, append(loc, "additionalProperties"))
+		u.visitSchemaProxy(&schema.AdditionalProperties.A, append(loc, "additionalProperties"))
 		if schema.AdditionalProperties.A != before {
 			changed = true
 		}
@@ -186,7 +204,7 @@ func visitSchema(schema *base.Schema, loc []any) (*base.Schema, error) {
 		}
 		lloc := append(loc, "properties", name)
 		if prop := propProxy.Schema(); schema != nil {
-			newSchema, err := visitSchema(prop, lloc)
+			newSchema, err := u.visitSchema(prop, lloc)
 			if err != nil {
 				return nil, err
 			}
@@ -217,7 +235,7 @@ func copyNonZeroProps[T any](dest, src *T) {
 	}
 }
 
-func EditOpenAPISpec(doc libopenapi.Document) error {
+func EditOpenAPISpec(doc libopenapi.Document, opts Options) error {
 	// because we know this is a v3 spec, we can build a ready to go model from it.
 	v3Model, errors := doc.BuildV3Model()
 
@@ -226,8 +244,10 @@ func EditOpenAPISpec(doc libopenapi.Document) error {
 		return (openapi3.MultiError)(errors)
 	}
 
-	visitPaths(v3Model.Model.Paths.PathItems.FromOldest())
-	visitComponents(v3Model.Model.Components)
+	u := upgrader{opts}
+
+	u.visitPaths(v3Model.Model.Paths.PathItems.FromOldest())
+	u.visitComponents(v3Model.Model.Components)
 	v3Model.Model.Version = "3.0.3"
 
 	return nil

@@ -21,6 +21,7 @@ var (
 )
 
 func Run(cmd *cobra.Command, args []string) error {
+	cmd.SilenceUsage = true
 	configFile, err := os.ReadFile(flagConfigFile)
 	if err != nil {
 		return fmt.Errorf("error reading config file '%s': %w", flagConfigFile, err)

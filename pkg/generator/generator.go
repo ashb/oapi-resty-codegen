@@ -17,6 +17,8 @@ var f embed.FS
 type GenerateArgs struct {
 	codegen.Configuration `yaml:",inline"`
 
+	DowngradeOptions openapi31downgrade.Options `yaml:"downgrade-options"`
+
 	// OutputFile is the filename to output.
 	OutputFile string `yaml:"output,omitempty"`
 	// Input filename is file (or URL) to read input from
@@ -56,7 +58,7 @@ func Generate(opts GenerateArgs) (string, error) {
 
 	if opts.Spec.OpenAPI == "3.1.0" {
 		var err error
-		opts.Spec, err = openapi31downgrade.DowngradeTo3_0(opts.Spec)
+		opts.Spec, err = openapi31downgrade.DowngradeTo3_0(opts.Spec, opts.DowngradeOptions)
 		if err != nil {
 			return "", fmt.Errorf("error downgrading spec in %q to OpenAPI 3.0.0\n: %w", opts.Input, err)
 		}
