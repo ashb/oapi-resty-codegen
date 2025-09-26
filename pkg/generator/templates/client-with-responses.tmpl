@@ -38,7 +38,6 @@ func HandleError(client *resty.Client, resp *resty.Response) error {
 
 	e := GeneralHTTPError{Response: resp}
 
-	// fmt.Printf("HandleError: IsRead: %v Error: %T\n", resp.IsRead, resp.Error())
 	e.Text = resp.String()
 	if resp.Header().Get("content-type") == "application/json" {
 		if json.Unmarshal([]byte(e.Text), &e.JSON) == nil {
