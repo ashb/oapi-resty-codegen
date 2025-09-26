@@ -1,0 +1,23 @@
+openapi: 3.1.0
+info:
+  version: 0.1.0
+servers:
+  - url: /execution
+paths: {}
+components:
+  schemas:
+    BundleInfo:
+      properties:
+        name:
+          type: string
+          title: Name
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+      type: object
+      required:
+      - name
+      title: BundleInfo
+      description: Schema for telling task which bundle to run with.

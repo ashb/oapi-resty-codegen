@@ -54,7 +54,7 @@ func (s *Suite) TestDowngrade() {
 			err = yaml.Unmarshal(expectedBytes, &expectedYAML)
 			s.Require().NoError(err)
 
-			output, err := DowngradeTo3_0(inputSpec)
+			output, err := DowngradeTo3_0(inputSpec, Options{AnyOfToOneOf: true})
 			s.Require().NoError(err)
 
 			convertedYAML = specToMap(output)
