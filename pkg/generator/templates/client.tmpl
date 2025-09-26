@@ -78,7 +78,6 @@ type {{ $clientTypeName }}Interface interface {
 	{{ $tag | tagToClass }}() {{ $tag | tagToClass }}Client
 {{end}}{{/* operationsByTag -*/}}
 
-{{ printf "// %T\n" ( . | untaggedOperations) }}
 {{/*
 {{range $op := . | untaggedOperations -}}
 {{ $opid := .OperationId -}}
