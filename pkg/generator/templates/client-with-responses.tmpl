@@ -78,44 +78,66 @@ func (c *{{ $class }}) {{ $localOpid }}Response({{ template "fnParams" . }}) (re
     var res {{ $responseTypeName }}
     {{- end }}
 
+	req := c.R().SetContext(ctx)
+    {{- if $hasRespType -}}
+      .SetResult(&res)
+    {{- end }}
+
 {{range $paramIdx, $param := .PathParams -}}
-    var pathParam{{$paramIdx}} string
+	{{ $paramName := printf "%q" $param.ParamName -}}
     {{if .IsPassThrough}}
-    pathParam{{$paramIdx}} = {{.GoVariableName}}
-    {{end}}
-    {{if .IsJson}}
-    var pathParamBuf{{$paramIdx}} []byte
-    pathParamBuf{{$paramIdx}}, err = json.Marshal({{.GoVariableName}})
+    req.SetPathParam({{ $paramName }}, {{.GoVariableName}})
+    {{- else if .IsStyled}}
+	{ {{/*- scope `pathParam` so we can reuse the var name */}}
+    pathParam, err := runtime.StyleParamWithLocation("{{.Style}}", {{.Explode}}, {{ $paramName }}, runtime.ParamLocationPath, {{.GoVariableName}})
     if err != nil {
         return nil, err
     }
-    pathParam{{$paramIdx}} = string(pathParamBuf{{$paramIdx}})
-    {{end}}
-    {{if .IsStyled}}
-    pathParam{{$paramIdx}}, err = runtime.StyleParamWithLocation("{{.Style}}", {{.Explode}}, "{{.ParamName}}", runtime.ParamLocationPath, {{.GoVariableName}})
-    if err != nil {
-        return nil, err
-    }
+    req.SetPathParam({{$paramName}}, pathParam)
+	}
     {{end -}}
 {{ end -}}{{/* range .PathParams */}}
 {{range $paramIdx, $param := .Params -}}
-    var param{{$paramIdx}} string
-    {{if .IsPassThrough}}
-    path{{$paramIdx}} = {{.GoVariableName}}
-    {{end}}
-    {{if .IsJson}}
-    var paramBuf{{$paramIdx}} []byte
-    paramBuf{{$paramIdx}}, err = json.Marshal({{.GoVariableName}})
-    if err != nil {
-        return nil, err
-    }
-    param{{$paramIdx}} = string(paramBuf{{$paramIdx}})
+	{{ $paramVar := printf "path%d" $paramIdx }}
+	{{ $paramName := printf "%q" $param.ParamName -}}
+    {{if .IsPassThrough -}}
+		{{ $paramVar = .GoVariableName -}}
+    {{else if .IsJson -}}
+		var paramBuf{{$paramIdx}} []byte
+		paramBuf{{$paramIdx}}, err = json.Marshal({{.GoVariableName}})
+		if err != nil {
+			return nil, err
+		}
+		{{$paramVar}} := string(paramBuf{{$paramIdx}})
     {{end}}
     {{if .IsStyled}}
-    param{{$paramIdx}}, err = runtime.StyleParamWithLocation("{{.Style}}", {{.Explode}}, "{{.ParamName}}", runtime.ParamLocation{{ .In | ucFirst }}, params.{{.GoName}})
-    if err != nil {
-        return nil, err
-    }
+		{{if .IndirectOptional }}
+		if params != nil && params.{{.GoName}} != nil {
+		{{end -}}
+
+		{{ if and .Explode (eq .In "query") }}
+			{{/*- When we are exploding a path param, we want to use StyleParamWithLocation to get the correct style
+			and param etc, but it gives us a string, so we need to parse it back to get the url.Values */}}
+			exploded, err := runtime.StyleParamWithLocation("{{.Style}}", {{.Explode}}, "{{.ParamName}}", runtime.ParamLocation{{ .In | ucFirst }}, params.{{.GoName}})
+			if err != nil {
+				return nil, err
+			}
+			vals, err := url.ParseQuery(exploded)
+			if err != nil {
+				return nil, err
+			}
+			req.SetQueryParamsFromValues(vals)
+
+		{{ else }}
+			{{$paramVar}}, err := runtime.StyleParamWithLocation("{{.Style}}", {{.Explode}}, "{{.ParamName}}", runtime.ParamLocation{{ .In | ucFirst }}, params.{{.GoName}})
+			if err != nil {
+				return nil, err
+			}
+			req.{{ paramLocationToSetter $param }}({{$paramName}}, {{$paramVar}})
+		{{end -}}
+    {{end -}}
+    {{if .IndirectOptional -}}
+		}
     {{end -}}
 {{ end -}}{{/* range .Params */}}
 
@@ -124,28 +146,18 @@ func (c *{{ $class }}) {{ $localOpid }}Response({{ template "fnParams" . }}) (re
       return nil, fmt.Errorf("{{ $localOpid }} requires a non-nil body argument")
     }
     {{ end -}}
-    resp, err = c.R().
-      SetContext(ctx).
-    {{- range $paramIdx, $param := .PathParams}}
-      SetPathParam("{{ $param.ParamName }}", pathParam{{$paramIdx}}).{{end}}
-    {{ range $paramIdx, $param := .Params -}}
-    {{ if eq $param.In "header" -}}
-    SetHeader({{printf "%q" $param.ParamName}}, param{{$paramIdx}}).
-    {{ else if eq $param.In "query" -}}
-    SetQueryParam({{printf "%q" $param.ParamName}}, param{{$paramIdx}}).
-    {{ end -}}
-    {{- end -}}{{/* range .Params */}}
-    {{if .HasBody }}SetBody(body).{{ end}}
-    {{- if $hasRespType }}
-      SetResult(&res).
-    {{- end }}
+    resp, err = req.
+    {{if .HasBody -}}
+    SetContentType("application/json").
+    SetBody(body).
+    {{end -}}
       {{ $op.Method | lower | title }}("
-		{{- /* If .Path starts with '/' (0x2f) strip it off */ -}}
-		{{- if eq (index .Path 0) 0x2f -}}
-			{{ slice .Path 1 -}}
-		{{- else -}}
-			{{ .Path }}
-		{{- end }}")
+        {{- /* If .Path starts with '/' (0x2f) strip it off */ -}}
+        {{- if eq (index .Path 0) 0x2f -}}
+            {{ slice .Path 1 -}}
+        {{- else -}}
+            {{ .Path }}
+        {{- end }}")
     if err != nil {
         return resp, err
     }

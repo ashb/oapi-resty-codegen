@@ -151,6 +151,51 @@ func (suite *PetStoreSuite) TestDelete() {
 	suite.Nil(err)
 }
 
+func (suite *PetStoreSuite) TestFindByTags() {
+	// Test that optional params sends the correct requests
+	tags := []string{"abc", "def"}
+
+	cases := map[string]struct {
+		params *FindPetsByTagsParams
+		mf     httpmock.MatcherFunc
+	}{
+		"nil-params": {
+			params: nil,
+			mf: func(req *http.Request) bool {
+				suite.Equal(req.URL.RawQuery, "")
+				return true
+			},
+		},
+		"empty-params": {
+			params: &FindPetsByTagsParams{},
+			mf: func(req *http.Request) bool {
+				suite.Equal(req.URL.RawQuery, "")
+				return true
+			},
+		},
+		"with-tags": {
+			params: &FindPetsByTagsParams{Tags: &tags},
+			mf: func(req *http.Request) bool {
+				suite.Equal(req.URL.RawQuery, "tags=abc&tags=def")
+				return true
+			},
+		},
+	}
+
+	for name, tc := range cases {
+		suite.Run(name, func() {
+			matcher := httpmock.NewMatcher("", tc.mf)
+			suite.transport.Reset()
+			suite.transport.RegisterMatcherResponder("GET", Prefix+"/pet/findByTags", matcher,
+				httpmock.NewBytesResponder(200, nil),
+			)
+
+			_, err := suite.client.Pet().FindByTags(context.Background(), tc.params)
+			suite.Nil(err)
+		})
+	}
+}
+
 func (suite *PetStoreSuite) TestCreateUser() {
 	body := &User{}
 
