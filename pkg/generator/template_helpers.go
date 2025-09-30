@@ -100,6 +100,15 @@ func paramLocationToSetter(p codegen.ParameterDefinition) string {
 	}
 }
 
+func hasRequiredParams(op codegen.OperationDefinition) bool {
+	for _, p := range op.Params() {
+		if p.Required {
+			return true
+		}
+	}
+	return false
+}
+
 func init() {
 	maps.Copy(codegen.TemplateFunctions, map[string]any{
 		"operationsByTag":         operationsByTag,
@@ -108,5 +117,6 @@ func init() {
 		"convertOperationWithTag": convertOperationWithTag,
 		"bestBody":                jsonTypeOrFirst[codegen.RequestBodyDefinition],
 		"paramLocationToSetter":   paramLocationToSetter,
+		"hasRequiredParams":       hasRequiredParams,
 	})
 }

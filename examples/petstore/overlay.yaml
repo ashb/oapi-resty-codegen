@@ -1,0 +1,22 @@
+overlay: 1.0.0
+info:
+  title: OpenAPI Overlay
+  version: 0.0.0
+actions:
+- target: $.paths['/pet/findByStatus'].get
+  update:
+    parameters:
+      # Add two required query params
+      - name: animal
+        in: query
+        description: Month number of event (1-12)
+        required: true
+        schema:
+          type: string
+
+      - name: min_age
+        in: query
+        description: Start time of event
+        required: true
+        schema:
+          type: integer

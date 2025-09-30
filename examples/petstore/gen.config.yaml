@@ -10,6 +10,6 @@ generate:
   client: true
 output-options:
   # To make test coverage better, we only include the endpoints we want to test!
-  include-operation-ids: [addPet, deletePet, createUser, findPetsByTags]
-  # overlay:
-  #   path: overlay.yml
+  include-operation-ids: [addPet, deletePet, createUser, findPetsByTags, findPetsByStatus]
+  overlay:
+    path: overlay.yaml
