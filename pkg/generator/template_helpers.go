@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"fmt"
 	"iter"
 	"maps"
 	"strings"
@@ -86,6 +87,19 @@ func jsonTypeOrFirst[T any](items []T) T {
 	return first
 }
 
+func paramLocationToSetter(p codegen.ParameterDefinition) string {
+	switch p.In {
+	case "path":
+		return "SetPathParam"
+	case "header":
+		return "SetHeader"
+	case "cookie":
+		return "SetQueryParam"
+	default:
+		panic(fmt.Sprintf("Unhandled parameter location %q", p.In))
+	}
+}
+
 func init() {
 	maps.Copy(codegen.TemplateFunctions, map[string]any{
 		"operationsByTag":         operationsByTag,
@@ -93,5 +107,6 @@ func init() {
 		"tagToClass":              tagToClass,
 		"convertOperationWithTag": convertOperationWithTag,
 		"bestBody":                jsonTypeOrFirst[codegen.RequestBodyDefinition],
+		"paramLocationToSetter":   paramLocationToSetter,
 	})
 }

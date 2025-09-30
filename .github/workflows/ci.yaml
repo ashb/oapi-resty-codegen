@@ -44,14 +44,26 @@ jobs:
       with:
         go-version: ${{ matrix.version }}
     - name: Run tests
+      # GOCOVERDIR sets the dir where `go run -cover` writes its coverage data too (i.e. from the instrumented generator binary)
+      # And -test.gocoverdir sets where the tests write their coverage data to.
+      #
+      # And then `go tool covdata textfmt` merges the various sources in to the old style that tooling expects
       run: |
-        just test -f github-actions --jsonfile testrun.json -- -coverprofile=cover.out ./...
+        mkdir -p covdata/unit/ covdata/gen/
+        export GOCOVERDIR="$PWD/covdata/gen"
+        just test -f github-actions --jsonfile testrun.json -- -cover ./... -args -test.gocoverdir="$PWD/covdata/unit"
     - name: Report
       uses: mcous/go-test-annotations@c88dae7c338c628e850685a0e8aa6a8fc2f4685d
       # Only upload annotations from 1.24 -- we can manually go and look for other failures
       if: ${{ !cancelled() && matrix.version == '1.24' }}
       with:
         test-report: testrun.json
+    - name: Merge coverage
+      if: ${{ !cancelled() && matrix.version == '1.24' && env.ACT != 'true' }}
+      run: |
+        go tool covdata textfmt -i=./covdata/gen,./covdata/unit -o cover.out
+        # We need to make coveralls happy with the merged file output
+        sed -i  -e "s#${PWD}/#github.com/ashb/oapi-resty-codegen/#" cover.out
     - name: Report Coveralls
       uses: coverallsapp/github-action@v2
       # Don't run Coveralls locally when we are invoked via `act`
