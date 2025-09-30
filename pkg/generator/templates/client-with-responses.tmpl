@@ -74,7 +74,7 @@ type {{ $class }} struct {
 
 // {{ $localOpid }}Response performs the HTTP request and returns the lower level [resty.Response]
 func (c *{{ $class }}) {{ $localOpid }}Response({{ template "fnParams" . }}) (resp *resty.Response, err error) {
-	{{ $hasRequiredParams := hasRequiredParams . }}
+	{{ $hasRequiredParams := hasRequiredParams . -}}
 	{{ if $hasRequiredParams -}}
 	if params == nil {
 		return nil, fmt.Errorf("{{ $localOpid }} requires a non-nil params argument")
@@ -119,13 +119,13 @@ func (c *{{ $class }}) {{ $localOpid }}Response({{ template "fnParams" . }}) (re
     {{if .IsStyled}}
 		{{if .IndirectOptional }}
 		if {{- if not $hasRequiredParams }} params != nil &&{{ end }} params.{{.GoName}} != nil {
-		{{else}}{{/* Create a scope block so `exploded` is only in scope for a short while */ -}}
+		{{- else}}{{/* Create a scope block so `exploded` is only in scope for a short while */ -}}
 		{
-		{{end -}}
+		{{- end -}}
 
-		{{ if and .Explode (eq .In "query") }}
+		{{- if and .Explode (eq .In "query") -}}
 			{{/*- When we are exploding a path param, we want to use StyleParamWithLocation to get the correct style
-			and param etc, but it gives us a string, so we need to parse it back to get the url.Values */}}
+			and param etc, but it gives us a string, so we need to parse it back to get the url.Values -*/}}
 			exploded, err := runtime.StyleParamWithLocation("{{.Style}}", {{.Explode}}, "{{.ParamName}}", runtime.ParamLocation{{ .In | ucFirst }}, params.{{.GoName}})
 			if err != nil {
 				return nil, err
@@ -136,7 +136,7 @@ func (c *{{ $class }}) {{ $localOpid }}Response({{ template "fnParams" . }}) (re
 			}
 			req.SetQueryParamsFromValues(vals)
 
-		{{ else }}
+		{{- else }}
 			{{$paramVar}}, err := runtime.StyleParamWithLocation("{{.Style}}", {{.Explode}}, "{{.ParamName}}", runtime.ParamLocation{{ .In | ucFirst }}, params.{{.GoName}})
 			if err != nil {
 				return nil, err
