@@ -82,7 +82,7 @@ func (suite *PetStoreSuite) TestAddOk() {
 		Name:     "Midnight",
 		Status:   &status,
 	})
-	suite.Nil(err)
+	suite.NoError(err)
 	suite.NotNil(resp, "%s", resp)
 	suite.EqualValues(*resp.Id, 123)
 	suite.Equal(resp.Name, "Midnight")
@@ -148,7 +148,7 @@ func (suite *PetStoreSuite) TestDelete() {
 		httpmock.NewBytesResponder(200, nil),
 	)
 	err := suite.client.Pet().Delete(context.Background(), 12, &params)
-	suite.Nil(err)
+	suite.NoError(err)
 }
 
 func (suite *PetStoreSuite) TestFindByTags() {
@@ -191,9 +191,21 @@ func (suite *PetStoreSuite) TestFindByTags() {
 			)
 
 			_, err := suite.client.Pet().FindByTags(context.Background(), tc.params)
-			suite.Nil(err)
+			suite.NoError(err)
 		})
 	}
+}
+
+func (suite *PetStoreSuite) TestFindByStatus() {
+	suite.transport.RegisterResponder("GET", Prefix+"/pet/findByStatus",
+		httpmock.NewBytesResponder(200, nil),
+	)
+
+	_, err := suite.client.Pet().FindByStatus(context.Background(), nil)
+	suite.EqualError(err, "FindByStatus requires a non-nil params argument")
+
+	_, err = suite.client.Pet().FindByStatus(context.Background(), &FindPetsByStatusParams{})
+	suite.NoError(err)
 }
 
 func (suite *PetStoreSuite) TestCreateUser() {
@@ -204,5 +216,5 @@ func (suite *PetStoreSuite) TestCreateUser() {
 	)
 
 	_, err := suite.client.User().Create(context.Background(), body)
-	suite.Nil(err)
+	suite.NoError(err)
 }

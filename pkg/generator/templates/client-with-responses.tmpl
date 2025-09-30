@@ -74,6 +74,12 @@ type {{ $class }} struct {
 
 // {{ $localOpid }}Response performs the HTTP request and returns the lower level [resty.Response]
 func (c *{{ $class }}) {{ $localOpid }}Response({{ template "fnParams" . }}) (resp *resty.Response, err error) {
+	{{ $hasRequiredParams := hasRequiredParams . }}
+	{{ if $hasRequiredParams -}}
+	if params == nil {
+		return nil, fmt.Errorf("{{ $localOpid }} requires a non-nil params argument")
+	}
+	{{- end }}
     {{ if $hasRespType -}}
     var res {{ $responseTypeName }}
     {{- end }}
@@ -112,7 +118,9 @@ func (c *{{ $class }}) {{ $localOpid }}Response({{ template "fnParams" . }}) (re
     {{end}}
     {{if .IsStyled}}
 		{{if .IndirectOptional }}
-		if params != nil && params.{{.GoName}} != nil {
+		if {{- if not $hasRequiredParams }} params != nil &&{{ end }} params.{{.GoName}} != nil {
+		{{else}}{{/* Create a scope block so `exploded` is only in scope for a short while */ -}}
+		{
 		{{end -}}
 
 		{{ if and .Explode (eq .In "query") }}
@@ -136,9 +144,7 @@ func (c *{{ $class }}) {{ $localOpid }}Response({{ template "fnParams" . }}) (re
 			req.{{ paramLocationToSetter $param }}({{$paramName}}, {{$paramVar}})
 		{{end -}}
     {{end -}}
-    {{if .IndirectOptional -}}
-		}
-    {{end -}}
+	}
 {{ end -}}{{/* range .Params */}}
 
     {{ if .BodyRequired -}}
